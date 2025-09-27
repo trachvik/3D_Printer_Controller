@@ -1,0 +1,39 @@
+//request:
+
+{
+    "jsonrpc": "2.0",
+    "method": "printer.objects.subscribe",
+    "params":
+    {
+        "objects":
+        {
+            "heater_bed": ["temperature", "target"],
+            "extruder": ["temperature","target"]
+        }
+    },
+    "id": 5434
+}
+
+//response:
+
+{
+    "jsonrpc": "2.0",
+    "result":
+    {
+        "eventtime": 3211.264596327,
+        "status":
+        {
+            "heater_bed":
+            {
+                "temperature": 15.85,
+                "target": 0.0
+            },
+            "extruder":
+            {
+                "temperature": 19.99,
+                "target": 0.0
+            }
+        }
+    },
+    "id": 5434
+}

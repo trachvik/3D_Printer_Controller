@@ -1,0 +1,7 @@
+GET /websocket HTTP/1.1
+Host: *printers_host*
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
+Origin: *printers_url*
+Sec-WebSocket-Version: 13
