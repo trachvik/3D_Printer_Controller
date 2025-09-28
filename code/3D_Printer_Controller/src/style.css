@@ -1,0 +1,70 @@
+body
+{
+    /* text-align: center; */
+    background-color: rgba(0, 59, 101, 0.379);
+
+}
+
+table
+{
+  align-content: center;
+}
+
+#border_div
+{
+    text-align: left;
+    color: white;
+    background-color: hsla(0, 0%, 35%, 0.336);
+    border-radius: 25px;
+    padding-left: 100px;
+    padding-right: 100px;
+    padding-top: 20px;
+    width: 175px;
+    height: 900px;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 50px;
+    margin-bottom: 50px;
+}
+
+#config_div
+{
+    width: 500px;
+    height: 200px;
+    background-color: none;
+}
+
+input
+{
+    border-radius: 5px;
+    padding: 8px;
+}
+
+label
+{
+    align-content: left;
+}
+
+.center
+{
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.input_table
+{
+    border-radius: 15px;
+    width: 100px;
+    height: 100px;
+
+}
+#submit
+{
+background-color: #1113963f;
+  border: none;
+  color: white;
+  padding: 12px 20px;
+  margin: 15px 30px;
+  cursor: pointer;
+ 
+}

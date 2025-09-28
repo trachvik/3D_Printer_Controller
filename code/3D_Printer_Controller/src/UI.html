@@ -1,38 +1,56 @@
-<head><meta charset="UTF-8"><title>ESP32 Setup</title></head>
+<head>
+  <meta charset="UTF-8"><title>ESP32 Setup</title>
+  <link rel="stylesheet" href="style.css">
+</head>
   <body>
-    <h2>Nastavení Wi-Fi a proměnných</h2>
+    <div id="border_div">
+    <h2>Wifi settings:</h2>
     <form action="/save" method="POST">
-      SSID Wi-Fi: <input type="text" name="ssid"><br>
-      Heslo Wi-Fi: <input type="password" name="pass"><br><br>
-      WebSocket IP: <input type="text" name="HOST"><br>
 
-    <table border="1" cellpadding="4">
+      <div id="config_div">
+
+      <label for="fname">Wifi ssid:</label><br>
+      <input type="text" name="ssid"><br>
+      <label for="fname">Password:</label><br>
+      <input type="password" name="pass"><br>
+      <label for="fname">Printer IP:</label><br>
+      <input type="text" name="HOST"><br>
+      <label for="fname">API PORT:</label><br>
+      <input type="text" name="PORT"><br>
+      <br>
+      </div>
+      <h2>User defined keys:</h2>
+      
+<table class="center">
     <tr>
-      <td><input type="text" name="key1"></td>
-      <td><input type="text" name="key2"></td>
-      <td><input type="text" name="key3"></td>
-      <td><input type="text" name="key4"></td>
+      <td><input type="text" name="key0" class="input_table"></td>
+      <td><input type="text" name="key1" class="input_table"></td>
+      <td><input type="text" name="key2" class="input_table"></td>
+      <td><input type="text" name="key3" class="input_table"></td>
     </tr>
     <tr>
-      <td><input type="text" name="key5"></td>
-      <td><input type="text" name="key6"></td>
-      <td><input type="text" name="key7"></td>
-      <td><input type="text" name="key8"></td>
+      <td><input type="text" name="key4" class="input_table"></td>
+      <td><input type="text" name="key5" class="input_table"></td>
+      <td><input type="text" name="key6" class="input_table"></td>
+      <td><input type="text" name="key7" class="input_table"></td>
     </tr>
     <tr>
-      <td><input type="text" name="key9"></td>
-      <td><input type="text" name="key10"></td>
-      <td><input type="text" name="key11"></td>
-      <td><input type="text" name="key12"></td>
+      <td><input type="text" name="key8" class="input_table"></td>
+      <td><input type="text" name="key9" class="input_table"></td>
+      <td><input type="text" name="keyA" class="input_table"></td>
+      <td><input type="text" name="keyB" class="input_table"></td>
     </tr>
     <tr>
-      <td><input type="text" name="key13"></td>
-      <td><input type="text" name="key14"></td>
-      <td><input type="text" name="key15"></td>
-      <td><input type="text" name="key16"></td>
+      <td><input type="text" name="keyC" class="input_table"></td>
+      <td><input type="text" name="keyD" class="input_table"></td>
+      <td><input type="text" name="keyE" class="input_table"></td>
+      <td><input type="text" name="keyF" class="input_table"></td>
     </tr>
   </table>
-  
-      <input type="submit" value="Uložit">
+      <input type="submit" value="Submit" id="submit">
     </form>
+    
+</div>
   </body></html>
+
+

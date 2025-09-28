@@ -6,10 +6,11 @@
 #include <ArduinoJson.h>
 #include <KeyPad.h>
 
-int wifiConnect(const char*, const char*);
+int wifiConnect();
 int initWebSocket(void);
 void webSocketEvent(WStype_t, uint8_t *, size_t);
 char IntToChar(int);
+void ParseAndSave(String);
 
 String PATH = "/websocket";
 String url = "https://*printers_host*"; // TO DO
@@ -30,7 +31,7 @@ void handleRoot() {
   <head><meta charset="UTF-8"><title>ESP32 Setup</title></head>
   <body>
     <h2>Wifi settings:</h2>
-    <form action="/save" method="POST">
+    <form action="/save" method="POST" enctype="text/plain">
       SSID Wi-Fi: <input type="text" name="ssid"><br>
       Password: <input type="password" name="pass"><br><br>
     <h2>Printer settings:</h2>
@@ -53,15 +54,15 @@ void handleRoot() {
     </tr>
     <tr>
       <td><input type="text" name="key8"></td>
+      <td><input type="text" name="key9"></td>
       <td><input type="text" name="keyA"></td>
       <td><input type="text" name="keyB"></td>
-      <td><input type="text" name="keyC"></td>
     </tr>
     <tr>
+      <td><input type="text" name="keyC"></td>
       <td><input type="text" name="keyD"></td>
       <td><input type="text" name="keyE"></td>
       <td><input type="text" name="keyF"></td>
-      <td><input type="text" name="keyG"></td>
     </tr>
   </table>
   
@@ -89,30 +90,13 @@ Keypad kpd = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
 
 void handleSave()
 {
-  String ssid = server.arg("ssid");
-  String pass = server.arg("pass");
-
-  // saves data onto flash memory
-  prefs.begin("config", false);
-  prefs.putString("wifi_ssid", ssid);
-  prefs.putString("wifi_pass", pass);
-  prefs.putString("HOST",  server.arg("HOST"));
-  prefs.putInt("PORT", server.arg("PORT").toInt());
-  prefs.putString("key",  server.arg("key"));
-
-  for(int i = 0; i < 16; i++) // TO DO longer gcodes
-  {
-    String arg = "key" + (String)IntToChar(i);
-    //Serial.print("arg: ");Serial.println(IntToChar(i));
-    prefs.putString(((String)IntToChar(i)).c_str(), server.arg(arg));
-    Serial.printf("%s: %s\n", arg, prefs.getString(((String)IntToChar(i)).c_str()));
-  }
+  ParseAndSave(server.arg("plain"));
 
   server.send(200, "text/html",
     "<h3>Saved succesfully! Device will now try to connect to wifi…</h3>");
   delay(2000);
 
-  wifiConnect(ssid.c_str(), pass.c_str());
+  wifiConnect();
 }
 
 void setup()
@@ -131,7 +115,7 @@ void setup()
     // Setting up access point
     WiFi.mode(WIFI_AP);
     WiFi.softAP(ap_ssid, ap_pass);
-    Serial.print("SoftAP běží. IP: ");
+    Serial.print("Access Point IP: ");
     Serial.println(WiFi.softAPIP());
 
     server.on("/", handleRoot);
@@ -181,8 +165,16 @@ int initWebSocket()
   return 1;
 }
 
-int wifiConnect(const char* ssid, const char* pass)
+int wifiConnect()
 {
+  prefs.begin("config", true);
+  String ssid = prefs.getString("ssid");
+  String pass = prefs.getString("pass");
+  prefs.end();
+
+  //Serial.print("ssid: "); Serial.println(ssid);
+  //Serial.print("pass: "); Serial.println(pass);
+
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, pass); 
 
@@ -261,6 +253,48 @@ char IntToChar(int a)
   return ret;
 }
 
+void ParseAndSave(String stream)
+{
+  int arg_count = 20;
+  int start[arg_count];
+  int end[arg_count];
+  int pos = 0;
+
+  for(int i = 0; i < arg_count; i++)
+  {
+    start[i] = stream.indexOf('=', pos) + 1;
+    end[i] = stream.indexOf('\n', pos);
+    pos = end[i] + 1;
+    //Serial.print("pos: "); Serial.println(pos);
+  }
+
+  String ssid = stream.substring(start[0], end[0]);
+  String pass = stream.substring(start[1], end[1]);
+  String HOST = stream.substring(start[2], end[2]);
+  String PORT = stream.substring(start[3], end[4]);
+  ssid.trim();
+  pass.trim();
+  HOST.trim();
+  PORT.trim(); // .trim() deletes all invisible characters
+
+  prefs.begin("config", false);
+  prefs.putString("ssid", ssid);
+  prefs.putString("pass", pass);
+  prefs.putString("HOST", HOST);
+  prefs.putInt("PORT", stream.substring(start[3], end[3]).toInt());
+
+  for(int i = 4; i < 20; i++) // save keys values
+  {
+    String arg = "key" + (String)IntToChar(i - 4);
+
+    String gcode = stream.substring(start[i], end[i]);
+    gcode.trim();
+    prefs.putString(((String)IntToChar(i - 4)).c_str(), gcode);
+    //Serial.printf("%s: %s\n",arg, gcode);
+
+  }
+  prefs.end();
+}
 
 
 
