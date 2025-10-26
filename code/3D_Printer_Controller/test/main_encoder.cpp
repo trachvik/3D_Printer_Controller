@@ -15,7 +15,7 @@ int range = 16384; // 14-bit sensor
 
 void setup()
 {
-	Serial.begin(112500);
+	Serial.begin(115200);
 	angleSensor.begin();
     past_pos = angleSensor.getRawRotation();
 }
@@ -27,8 +27,8 @@ void loop()
     // print to serial monitor
     if(millis() - time_past > 1000)
     {
-        //Serial.print("Absolute position: ");
-        //Serial.println(curr_pos);
+        Serial.print("Absolute position: ");
+        Serial.println(angleSensor.getRawRotation());
         //Serial.print("Relative position: ");
         //Serial.println(rel_pos);
         Serial.print("Step couter: ");

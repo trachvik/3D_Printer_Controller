@@ -1,16 +1,18 @@
 #include "header_files/hapticControl.h"
  
-hapticControl::hapticControl(MagneticSensorSPI sensor_init, BLDCMotor motor_init, BLDCDriver6PWM driver_init, int num_steps_init, int voltage_limit): 
-  sensor(sensor_init), motor(motor_init), driver(driver_init), num_steps(num_steps_init)
+hapticControl::hapticControl(MagneticSensorSPI sensor_init, BLDCMotor motor_init, BLDCDriver6PWM driver_init, int voltage_limit): 
+  sensor(sensor_init), motor(motor_init), driver(driver_init), voltage_limit(voltage_limit)
 {
-  this->voltage_limit = voltage_limit;
   step_size = _2PI/(float)num_steps;
+  num_steps_old = num_steps;
 }
 
 void hapticControl::init()
 {
+  setNumSteps();
     // initialize magnetic sensor hardware
   sensor.init();
+  // diagnostic: check sensor read immediately after init
   // link the motor to the sensor
   motor.linkSensor(&sensor);
   // driver config
@@ -29,14 +31,12 @@ void hapticControl::init()
   motor.linkDriver(&driver);
   // set motion control loop to be used
   // set the torque control type
+  // Set motor parameters for proper FOC
   //motor.phase_resistance = 12.5; // 12.5 Ohms
   motor.torque_controller = TorqueControlType::voltage;
-  // set motion control loop to be used
+  // Set motion control loop
   motor.controller = MotionControlType::torque;
-  //  maximal velocity of the position control
-  // default 20
-  //motor.velocity_limit = 4;
-  // default voltage_power_supply
+  // Set reasonable voltage limit for stable control
   motor.voltage_limit = voltage_limit;
   // use monitoring with serial 
   //Serial.begin(115200);
@@ -48,7 +48,7 @@ void hapticControl::init()
   motor.initFOC();
   //Serial.println("Motor ready.");
   //start_angle = sensor.getAngle();
-  _delay(1000);
+  _delay(1000); // <----- Is this necessary?
 
   start_angle = sensor.getAngle();
 }
@@ -59,24 +59,50 @@ void hapticControl::loop()
   // main FOC algorithm function
   motor.loopFOC();
 
-  // Motion control function
+  setNumSteps();
 
-  angle_rel = (sensor.getAngle() - start_angle);
+  // Preserve position when num_steps is changed
+  if(num_steps != num_steps_old)
+  {
+    step_count_old = step_count;
+    step_size = _2PI/(float)num_steps;
+    start_angle  = sensor.getAngle();
+    num_steps_old = num_steps;
+  }
+
+  float angle_rel = (sensor.getAngle() - start_angle);
 
   // compute signed step count (round to nearest step)
-  step_count_f = ((float)num_steps/_2PI) * angle_rel;
-  step_count = (int)round(step_count_f);
+  float step_count_f = ((float)num_steps/_2PI) * angle_rel;
+  step_count = (int)round(step_count_f) + step_count_old;
 
   while(angle_rel > _2PI) angle_rel -= _2PI;
   while(angle_rel < 0) angle_rel += _2PI;
 
-  step_count_abs = ((float)num_steps/_2PI)*(angle_rel);
+  int step_count_abs = ((float)num_steps/_2PI) * angle_rel;
+  float between_steps_pos = angle_rel - step_count_abs * step_size + step_size/2; // add step_size/2 to stabilize center of step
 
-  between_steps_pos = angle_rel - step_count_abs * step_size;
-
-  if(between_steps_pos > step_size/2) target_voltage = motor.voltage_limit*((step_size - between_steps_pos)/(step_size/2));
-  if(between_steps_pos < step_size/2) target_voltage = -motor.voltage_limit*(between_steps_pos/(step_size/2));
+  // Use smooth sinusoidal transition for better stability
+  float normalized_pos = between_steps_pos / step_size; // 0 to 1
+  float target_voltage = -motor.voltage_limit * sin(_2PI * normalized_pos);
 
   motor.move(target_voltage);
 
+}
+
+void hapticControl::setNumSteps()
+{
+  // Update encoder state
+  encoder->tick();
+  int curPos = encoder->getPosition() / 2;
+  // compute coarse relative position in blocks of 16 (adjust as needed)
+  int relPos = abs(curPos - (curPos - curPos % 16)) + 1;  // 16 ... number of step increments
+  // store into the object's num_steps member
+  num_steps = relPos * 4;
+}
+
+void hapticControl::encoderInit(RotaryEncoder &encoder)
+{
+  // Store the address of the passed encoder
+  this->encoder = &encoder;
 }
