@@ -10,10 +10,25 @@ static char keys[4][4] = {
 printerControl::printerControl(byte rowPins[4], byte colPins[4])
   : kpd(makeKeymap(keys), rowPins, colPins, 4, 4)
 {
+  PATH = "/websocket";
+  url = "*printers_url*"; // TO DO
 }
 
-bool printerControl::init(String HOST, int PORT, String PATH, String url, String gcode[16])
+bool printerControl::init()
 {
+    Preferences prefs;
+    prefs.begin("config", true);
+    String HOST = prefs.getString("HOST");
+    int PORT = prefs.getInt("PORT");
+    //save gcodes to local array:
+    for(int i = 0; i < 16; i++)
+    {
+      //Serial.print("Key: ");Serial.println(prefs.getString(((String)i).c_str()));
+      this->gcode[i] = prefs.getString(((String)i).c_str());
+      //Serial.printf("gcode[%i]: %s\n", i, gcode[i]);
+    }
+    prefs.end();
+
     //webSocketInit:
     String header = "Origin: " + url;
     webSocket.setExtraHeaders(header.c_str());
@@ -31,12 +46,6 @@ bool printerControl::init(String HOST, int PORT, String PATH, String url, String
         this->webSocketEvent(type, payload, length);
     });
     webSocket.setReconnectInterval(15000);
-
-    //store gcode commands:
-    for(int i = 0; i < 16; i++)
-    {
-      this->gcode[i] = gcode[i];
-    } 
 
     return true;
 

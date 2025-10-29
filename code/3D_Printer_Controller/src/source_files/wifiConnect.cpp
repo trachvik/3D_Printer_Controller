@@ -1,10 +1,66 @@
 #include "header_files/wificonnect.h"
 
-char IntToChar(int a);
-
 wifiConnect::wifiConnect()
   : server(80)
 {
+    config_saved = false;
+}
+
+/*bool wifiConnect::configAvailable()
+{
+    prefs.begin("config", true);
+    String host = prefs.getString("HOST");
+    //String ssid = prefs.getString("ssid");
+    prefs.end();
+    return (host.length() > 0);
+}*/
+
+void wifiConnect::init()
+{
+    prefs.begin("config", false);
+    String ssid = prefs.getString("ssid");
+    String pass = prefs.getString("pass");
+    prefs.end();
+    Serial.print("Prefs ssid: "); Serial.println(ssid);
+
+    if(ssid == "") // first startup
+    {
+        Serial.println("first_startup");
+        // Setting up access point
+        WiFi.mode(WIFI_AP);
+        WiFi.softAP(ap_ssid, ap_pass);
+        Serial.print("Access Point IP: ");
+        Serial.println(WiFi.softAPIP());
+
+        server.on("/", [this](){
+            this->handleRoot();
+        });
+        server.on("/save", HTTP_POST, [this](){
+            this->handleSave();
+        });
+        server.begin();
+    }
+    else
+    {
+        connect(ssid, pass);
+    }
+    //TO DO failure handling
+}
+
+void wifiConnect::connect(String ssid, String pass)
+{
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, pass); 
+
+    Serial.println("Waiting for wifi");
+    int timeout_s = 30;
+    while (WiFi.status() != WL_CONNECTED && timeout_s-- > 0)
+    {
+        delay(1000);
+        Serial.print(".");
+    }
+    config_saved = true;
+    //TO DO failure handling
 }
 
 void wifiConnect::handleRoot()
@@ -59,13 +115,17 @@ void wifiConnect::handleRoot()
 
 void wifiConnect::handleSave()
 {
-  ParseAndSave(server.arg("plain"));
+    ParseAndSave(server.arg("plain"));
+    prefs.begin("config", true);
+    String ssid = prefs.getString("ssid");
+    String pass = prefs.getString("pass");
+    prefs.end();
 
-  server.send(200, "text/html",
+    server.send(200, "text/html",
     "<h3>Saved succesfully! Device will now try to connect to wifi…</h3>");
-  delay(2000);
+    delay(2000);
 
-  wifiConnect();
+    connect(ssid, pass);
 }
 
 void wifiConnect::ParseAndSave(String stream)
@@ -92,6 +152,7 @@ void wifiConnect::ParseAndSave(String stream)
   HOST.trim();
   PORT.trim(); // .trim() deletes all invisible characters
 
+  // open Preferences in read-write mode so putString() actually writes
   prefs.begin("config", false);
   prefs.putString("ssid", ssid);
   prefs.putString("pass", pass);
@@ -100,20 +161,10 @@ void wifiConnect::ParseAndSave(String stream)
 
   for(int i = 4; i < 20; i++) // save keys values
   {
-    String arg = "key" + (String)IntToChar(i - 4);
-
     String gcode = stream.substring(start[i], end[i]);
     gcode.trim();
-    prefs.putString(((String)IntToChar(i - 4)).c_str(), gcode);
-    //Serial.printf("%s: %s\n",arg, gcode);
+    String index = (String)(i - 4);
+    prefs.putString(index.c_str(), gcode);
   }
   prefs.end();
-}
-
-char IntToChar(int a)
-{
-  char ret;
-  if(a < 10 && a >= 0) ret = a + 48;
-  else if(a > 9 && a < 16) ret = a + 55;
-  return ret;
 }

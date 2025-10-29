@@ -1,6 +1,7 @@
 #include <WebSocketsClient.h>
 #include <ArduinoJson.h>
 #include <Keypad.h>
+#include <Preferences.h>
 
 class printerControl
 {
@@ -19,7 +20,7 @@ public:
      * @param PATH the websocket path
      * @param url the origin URL for the websocket connection
      */
-    bool init(String HOST, int PORT, String PATH, String url, String gcode[16]);
+    bool init();
     /**
      * Main loop to be called in main loop() function
      */
@@ -47,4 +48,6 @@ private:
     Keypad kpd;
     String gcode[16];
     //hapticControl knob; TO DO
+    String PATH;
+    String url;
 };
