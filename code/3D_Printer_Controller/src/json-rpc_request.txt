@@ -37,3 +37,18 @@
     },
     "id": 5434
 }
+
+
+{
+    "jsonrpc": "2.0",
+    "method": "notify_status_update",
+    "params":
+    [
+        {
+        "heater_bed": {"temperature": 20.36},
+        "extruder": {"temperature": 20.9}
+        },
+        70566.925774851
+    ]
+}      
+

@@ -2,28 +2,30 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <Preferences.h>
-#include <WebSocketsClient.h>
-#include <ArduinoJson.h>
-#include <KeyPad.h>
 #include "header_files/hapticControl.h"
+#include "header_files/printerControl.h"
 
-hapticControl HC = hapticControl(MagneticSensorSPI(AS5048_SPI, 5), BLDCMotor(7), BLDCDriver6PWM(15, 16, 17, 4, 21, 22), 30, 5);
+hapticControl HC(MagneticSensorSPI(AS5048_SPI, 5), BLDCMotor(7), BLDCDriver6PWM(15, 16, 17, 4, 21, 22), 5);
+RotaryEncoder encoder(35, 39, RotaryEncoder::LatchMode::TWO03);
+
+byte rowPins[4] = {14, 33, 13, 26}; //connect to the row pinouts of the keypad
+byte colPins[4] = {27, 25, 32, 12}; //connect to the column pinouts of the keypad
+
+printerControl PC(rowPins,colPins);
+
 
 int wifiConnect();
-int initWebSocket(void);
-void webSocketEvent(WStype_t, uint8_t *, size_t);
 char IntToChar(int);
 void ParseAndSave(String);
 
 String PATH = "/websocket";
-String url = "https://*printers_host*"; // TO DO
+String url = "*printers_url*"; // TO DO
 
 const char *ap_ssid = "3d-printer-controller";
 const char *ap_pass = "I~7hK5IV=yo89v+h<>&x";
 
 // WebServer on port 80
 WebServer server(80);
-WebSocketsClient webSocket;
 
 // saves data onto flash
 Preferences prefs;
@@ -77,20 +79,6 @@ void handleRoot()
 
   server.send(200, "text/html", page);
 }
-//keypad
-
-const byte ROWS = 4; //four rows
-const byte COLS = 4; //four columns
-char keys[ROWS][COLS] = {
-{'0','1','2','3'},
-{'4','5','6','7'},
-{'8','9','A','B'},
-{'C','D','E','F'}
-};
-byte rowPins[4] = {14, 33, 13, 26}; 
-byte colPins[4] = {27, 25, 32, 12};
-
-Keypad kpd = Keypad( makeKeymap(keys), rowPins, colPins, ROWS, COLS );
 
 void handleSave()
 {
@@ -108,8 +96,8 @@ void setup()
   Serial.begin(115200);
 
   prefs.begin("config", true);
-  String ssid = prefs.getString("wifi_ssid");
-  String pass = prefs.getString("wifi_pass");
+  String ssid = prefs.getString("ssid");
+  String pass = prefs.getString("pass");
   prefs.end();
   Serial.print("Prefs ssid: "); Serial.println(ssid);
 
@@ -131,7 +119,19 @@ void setup()
     wifiConnect();
   }
 
-  initWebSocket();
+  prefs.begin("config", true);
+  String HOST = prefs.getString("HOST");
+  int PORT = prefs.getInt("PORT");
+  String gcode[16];
+  for(int i = 0; i < 16; i++)
+  {
+    gcode[i] = prefs.getString(((String)IntToChar(i)).c_str());
+  }
+  prefs.end();
+
+  PC.init(HOST, PORT, PATH, url, gcode);
+  // initialize HC and pass the rotary encoder to it
+  HC.encoderInit(encoder);
   HC.init();
 
 }
@@ -141,42 +141,8 @@ long time_past = 0;
 void loop()
 {
   server.handleClient();
-  webSocket.loop();
   HC.loop();
-
-
-  char key = kpd.getKey();
-  if (key)
-  {
-    prefs.begin("config", true);
-    String gcode = prefs.getString(((String)key).c_str());
-    prefs.end();
-    String send = "{\"jsonrpc\": \"2.0\",\"method\": \"printer.gcode.script\",\"params\": {\"script\": \"" + gcode + "\"},\"id\": 7466}";
-    webSocket.sendTXT(send);
-    Serial.println(key);
-  }
-  if(millis() - time_past > 1000)
-  { 
-    Serial.println("Step count: ");
-    Serial.println(HC.step_count);
-    time_past = millis();
-  }
-}
-
-int initWebSocket()
-{
-  prefs.begin("config", true);
-  String HOST = prefs.getString("HOST");
-  int PORT = prefs.getInt("PORT");
-  prefs.end();
-
-  String header = "Origin: " + url;
-  webSocket.setExtraHeaders(header.c_str());
-  webSocket.begin(HOST, PORT, PATH);
-  webSocket.onEvent(webSocketEvent);
-  webSocket.setReconnectInterval(15000);
-
-  return 1;
+  PC.loop();
 }
 
 int wifiConnect()
@@ -184,6 +150,13 @@ int wifiConnect()
   prefs.begin("config", true);
   String ssid = prefs.getString("ssid");
   String pass = prefs.getString("pass");
+  String gcode[16];
+  /*for(int i = 0; i < 16; i++)
+  {
+    String arg = "key" + (String)IntToChar(i);
+    gcode[i] = prefs.getString(arg.c_str());
+    Serial.printf("Key %s: %s\n", arg.c_str(), gcode[i].c_str());
+  }*/
   prefs.end();
 
   //Serial.print("ssid: "); Serial.println(ssid);
@@ -212,52 +185,6 @@ int wifiConnect()
   }
 }
 
-void webSocketEvent(WStype_t type, uint8_t * payload, size_t length)
-{
-  switch(type) {
-    case WStype_DISCONNECTED:
-      Serial.println("[WSc] Disconnected!");
-      break;
-    case WStype_CONNECTED:
-      Serial.println("[WSc] Connected!");
-      //webSocket.sendTXT("{\"jsonrpc\": \"2.0\",\"method\": \"printer.gcode.script\",\"params\": {\"script\": \"M106 S255\"},\"id\": 7466}");
-      break;
-    case WStype_TEXT:
-      webSocket.sendTXT("{\"jsonrpc\": \"2.0\",\"method\": \"printer.objects.subscribe\",\"params\":{\"objects\": {\"heater_bed\": [\"temperature\", \"target\"], \"extruder\": [\"temperature\",\"target\"]}},\"id\": 5434}");
-      //is this the right place to send text to websocket??
-      JsonDocument filter;
-      filter["result"]["status"] = true;
-      char* data = (char*)payload;
-      JsonDocument doc;
-
-      DeserializationError error = deserializeJson(doc, data, DeserializationOption::Filter(filter));
-        // Test if parsing succeeds.
-      if (error)
-      {
-        Serial.print(F("deserializeJson() failed: "));
-        Serial.println(error.f_str());
-        return;
-      }
-        // Fetch values.
-        //
-        // Most of the time, you can rely on the implicit casts.
-        // In other case, you can do doc["time"].as<long>();
-        float ext_temp = doc["result"]["status"]["extruder"]["temperature"];
-        float ext_target = doc["result"]["status"]["extruder"]["target"];
-        float bed_temp = doc["result"]["status"]["heater_bed"]["temperature"];
-        float bed_target = doc["result"]["status"]["heater_bed"]["target"];
-        // Print values.
-        //Serial.printf("Extruder Temperature: %.2f --> %.2f,  Bed Temperature: %.2f --> %.2f \n", ext_temp, ext_target, bed_temp, bed_target);
-
-      //Serial.printf("[WSc] Text: %s\n", payload);
-      break;
-  }
- /*if(type == WStype_TEXT)
- {
-
- }*/
-
-}
 
 char IntToChar(int a)
 {
@@ -305,7 +232,6 @@ void ParseAndSave(String stream)
     gcode.trim();
     prefs.putString(((String)IntToChar(i - 4)).c_str(), gcode);
     //Serial.printf("%s: %s\n",arg, gcode);
-
   }
   prefs.end();
 }

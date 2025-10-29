@@ -1,7 +1,7 @@
 #include "header_files/hapticControl.h"
  
-hapticControl::hapticControl(MagneticSensorSPI sensor_init, BLDCMotor motor_init, BLDCDriver6PWM driver_init, int voltage_limit): 
-  sensor(sensor_init), motor(motor_init), driver(driver_init), voltage_limit(voltage_limit)
+hapticControl::hapticControl(MagneticSensorSPI sensor_init, BLDCMotor motor_init, BLDCDriver6PWM driver_init, int voltage_limit)
+  : sensor(sensor_init), motor(motor_init), driver(driver_init), voltage_limit(voltage_limit)
 {
   step_size = _2PI/(float)num_steps;
   num_steps_old = num_steps;
