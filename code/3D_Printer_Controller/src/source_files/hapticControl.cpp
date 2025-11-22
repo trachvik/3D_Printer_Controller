@@ -5,6 +5,7 @@ hapticControl::hapticControl(MagneticSensorSPI sensor_init, BLDCMotor motor_init
 {
   step_size = _2PI/(float)num_steps;
   num_steps_old = num_steps;
+  step_count_old = step_count;
 }
 
 void hapticControl::init()
@@ -64,7 +65,7 @@ void hapticControl::loop()
   // Preserve position when num_steps is changed
   if(num_steps != num_steps_old)
   {
-    step_count_old = step_count;
+    step_count_buffer = step_count;
     step_size = _2PI/(float)num_steps;
     start_angle  = sensor.getAngle();
     num_steps_old = num_steps;
@@ -74,7 +75,7 @@ void hapticControl::loop()
 
   // compute signed step count (round to nearest step)
   float step_count_f = ((float)num_steps/_2PI) * angle_rel;
-  step_count = (int)round(step_count_f) + step_count_old;
+  step_count = (int)round(step_count_f) + step_count_buffer;
 
   while(angle_rel > _2PI) angle_rel -= _2PI;
   while(angle_rel < 0) angle_rel += _2PI;
@@ -96,9 +97,9 @@ void hapticControl::setNumSteps()
   encoder->tick();
   int curPos = encoder->getPosition() / 2;
   // compute coarse relative position in blocks of 16 (adjust as needed)
-  int relPos = abs(curPos - (curPos - curPos % 16)) + 1;  // 16 ... number of step increments
+  encoder_val = abs(curPos - (curPos - curPos % 5)) + 1;  // 5 ... number of step increments | numbers [1,5]
   // store into the object's num_steps member
-  num_steps = relPos * 4;
+  num_steps = encoder_val * 4;
 }
 
 void hapticControl::encoderInit(RotaryEncoder &encoder)

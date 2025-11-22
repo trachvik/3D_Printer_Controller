@@ -1,10 +1,15 @@
 #include "header_files/wificonnect.h"
 #include "SPIFFS.h"
+#include <Wire.h>
+
+wifiConnect *wifiConnect::instance = nullptr;
 
 wifiConnect::wifiConnect()
   : server(80)
 {
     config_saved = false;
+    // register instance pointer for static handlers
+    wifiConnect::instance = this;
 }
 
 void wifiConnect::init()
@@ -28,13 +33,9 @@ void wifiConnect::init()
         WiFi.softAP(ap_ssid, ap_pass);
         Serial.print("Access Point IP: ");
         Serial.println(WiFi.softAPIP());
-
-        server.on("/", [this](){
-            this->handleRoot();
-        });
-        server.on("/save", HTTP_POST, [this](){
-            this->handleSave();
-        });
+      // Use static wrappers instead of lambdas capturing 'this'
+      server.on("/", wifiConnect::handleRootStatic);
+      server.on("/save", HTTP_POST, wifiConnect::handleSaveStatic);
         server.begin();
     }
     else
@@ -42,6 +43,15 @@ void wifiConnect::init()
         connect(ssid, pass);
     }
     //TO DO failure handling
+}
+
+// Static wrapper implementations
+void wifiConnect::handleRootStatic() {
+  if (wifiConnect::instance) wifiConnect::instance->handleRoot();
+}
+
+void wifiConnect::handleSaveStatic() {
+  if (wifiConnect::instance) wifiConnect::instance->handleSave();
 }
 
 void wifiConnect::connect(String ssid, String pass)
@@ -56,6 +66,10 @@ void wifiConnect::connect(String ssid, String pass)
         delay(1000);
         Serial.print(".");
     }
+    // Ensure I2C is initialized/re-initialized after WiFi starts
+    Wire.begin();
+    //Wire.setClock(400000);
+    Serial.println("\nWire.begin() called after WiFi connect");
     config_saved = true;
     //TO DO failure handling
 }

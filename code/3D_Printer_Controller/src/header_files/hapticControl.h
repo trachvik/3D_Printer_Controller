@@ -10,6 +10,7 @@ class hapticControl
 {
 public:
     int step_count; // current step count
+    int step_count_old;
     int num_steps; // number of steps in full rotation
     /** 
      * hapticControl class constructor
@@ -38,10 +39,11 @@ public:
      * Update num_steps from a rotary encoder
      */
     void setNumSteps();
-private:
+//private:
+    int encoder_val;
     int voltage_limit;
     int num_steps_old;
-    int step_count_old;
+    int step_count_buffer;
     float start_angle;
     float step_size;
     MagneticSensorSPI sensor;

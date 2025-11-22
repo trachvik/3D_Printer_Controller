@@ -2,3 +2,5 @@ user defined keys showed on display
 config button or other method
 octoprint?
 interrupts
+User fault manegament :(
+be able to start a print using this controller
