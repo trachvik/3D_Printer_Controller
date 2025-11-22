@@ -7,6 +7,8 @@ class wifiConnect
 public:
     wifiConnect();
     void init();
+    // true after a successful /save handling — main() can use this to delay other inits
+    //bool configAvailable();
     WebServer server;
     bool config_saved;
 
