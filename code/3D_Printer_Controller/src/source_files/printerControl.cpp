@@ -10,16 +10,13 @@ static char keys[4][4] = {
 printerControl::printerControl(byte rowPins[4], byte colPins[4])
   : kpd(makeKeymap(keys), rowPins, colPins, 4, 4, &extender)
 {
-  // Do not initialize I2C/extender here — do it later in init()
   PATH = "/websocket";
   url = "*printers_url*"; // TO DO
 }
 
 bool printerControl::init()
 {
-  // Initialize MCP23017 I2C expander here (after core/startup completed)
-  extender.init();
-
+    extender.init();
     Preferences prefs;
     prefs.begin("config", true);
     String HOST = prefs.getString("HOST");
@@ -126,35 +123,6 @@ void printerControl::loop()
       String send = "{\"jsonrpc\": \"2.0\",\"method\": \"printer.gcode.script\",\"params\": {\"script\": \"" + gcode_send + "\"},\"id\": 7466}";
       webSocket.sendTXT(send);
       Serial.println(key);
-      Serial.println(send);
     }
 }
 
-void printerControl::knob_action()
-{
-  //if()
-  //{}
-}
-
-void printerControl::move_axis(mode axis, int position)
-{
-  //position;
-  String ax;
-  switch(axis)
-  {
-    case MOVE_X:
-      ax = "X";
-      break;
-    case MOVE_Y:
-      ax = "Y";
-      break;
-    case MOVE_Z:
-      ax = "Z";
-      break;
-    default:
-      Serial.println("Error: expected axis");
-      return;
-  }
-  webSocket.sendTXT("{\"jsonrpc\": \"2.0\",\"method\": \"printer.gcode.script\",\"params\": {\"script\": \"G1 " + ax + (String)position + "\"},\"id\": 7466}");
-  Serial.println("{\"jsonrpc\": \"2.0\",\"method\": \"printer.gcode.script\",\"params\": {\"script\": \"G1 " + ax + (String)position + "\"},\"id\": 7466}");
-}

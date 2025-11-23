@@ -1,14 +1,15 @@
 #include <Arduino.h>
-#include <Wire.h>
 
 #include "header_files/wifiConnect.h"
 #include "header_files/hapticControl.h"
 #include "header_files/printerControl.h"
+#include "header_files/Display.h"
+#include <Wire.h>
 
-hapticControl HC(MagneticSensorSPI(AS5048_SPI, 5), BLDCMotor(7), BLDCDriver6PWM(15, 16, 17, 4, 21, 22), 5);
+hapticControl HC(MagneticSensorSPI(AS5048_SPI, 5), BLDCMotor(7), BLDCDriver6PWM(15, 16, 17, 4, 12, 32), 5);
 RotaryEncoder encoder(35, 39, RotaryEncoder::LatchMode::TWO03);
 
-//pins on MCP23017
+// Pins on the MCP23017 I/O expander
 byte rowPins[4] = {11, 10, 9, 8}; //connect to the row pinouts of the keypad
 byte colPins[4] = {12, 13, 14, 15}; //connect to the column pinouts of the keypad
 
@@ -16,22 +17,23 @@ printerControl PC(rowPins,colPins);
 bool printerControlinit = true;
 
 wifiConnect wifiCon;
-//wifiCon->knob.hapticControl(MagneticSensorSPI(AS5048_SPI, 5), BLDCMotor(7), BLDCDriver6PWM(15, 16, 17, 4, 21, 22), 5);
 
-//hw_timer_t * timer = NULL;
-//void IRAM_ATTR onTimer() //IRMA_ATTR ensures the function is placed in IRAM and can be called from an interrupt and is much faster than FLASH
-//{
-  // Zavolá naši rychlou smyčku pro motor
-  //HC.loop();
-  //Serial.println("Interrupt");
-//}
+Display display;
 
 void setup()
 {
   Serial.begin(115200);
-  // Ensure I2C bus is initialized early to avoid 'bus is not initialized' errors
-  Wire.begin();
-  //Wire.setClock(400000);
+
+  if (display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
+  {
+    Serial.println("Display initialized");
+    display.clearDisplay();
+    display.display();
+  } else
+  {
+    Serial.println("Warning: display.begin() failed");
+  }
+
   wifiCon.init();
   // This prevents PC.init() from beeing called before saving values to prefs
   if(wifiCon.config_saved)
@@ -43,52 +45,34 @@ void setup()
   HC.encoderInit(encoder);
   HC.init();
 
-  // timer interrupt setup
-  //timer = timerBegin(1000);
-  //timerAttachInterrupt(timer, &onTimer);
- // timerAlarm(timer, 150,true, 0);
-  //timerStart(timer);
- // timerAlarmWrite(timer, 1000, true); // once every 1000 microseconds (1ms)
-  //timerAlarmEnable(timer);
+  xTaskCreatePinnedToCore
+  (
+    hapticControl::startTask, // Voláme tu statickou funkci
+    "MotorTask",
+    2048,         // <--- Změna z 8192 na 2048 (stále budete mít rezervu cca 1700 bajtů)
+    &HC, // <--- DŮLEŽITÉ: Zde předáváme odkaz na konkrétní instanci (this)
+    1, // reduce priority so it doesn't starve main loop
+    NULL,
+    1 // pin to core 1
+  );
 }
 
-//long time_past = 0;
+long time_last = 0;
 
 void loop()
 {
+  if (HC.step_count != HC.step_count_old)
+  {
+    display.printText("step_count: " + String(HC.step_count) + "\n", 0, 0, 1.5, 1);
+   // Serial.println(HC.step_count);
+    HC.step_count_old = HC.step_count;
+  }
   if(wifiCon.config_saved && printerControlinit)
   {
     PC.init();
     printerControlinit = false;
   }
-  if(!wifiCon.config_saved) wifiCon.server.handleClient(); //run http server until data are saved
-  HC.loop();
- // wifiCon.server.handleClient();
-
+  wifiCon.server.handleClient();
+  //HC.loop();
   PC.loop();
-  /*int position;
-  switch(HC.encoder_val)
-  {
-    case 1:
-      position = HC.step_count*100;
-      break;
-    case 2:
-      position = HC.step_count*50;
-      break;
-    case 3:
-      position = HC.step_count*10;
-      break;
-    case 4:
-      position = HC.step_count*5;
-      break;
-    case 5:
-      position = HC.step_count;
-      break;
-  }
-  //int position = (HC.encoder_val)*HC.step_count;
-  if(HC.step_count != HC.step_count_old) 
-  {
-    PC.move_axis(MOVE_X, position);
-    HC.step_count_old = HC.step_count;
-  }*/
 }

@@ -40,6 +40,8 @@ public:
      */
     void setNumSteps();
 //private:
+
+    static void startTask(void* _this);
     int encoder_val;
     int voltage_limit;
     int num_steps_old;

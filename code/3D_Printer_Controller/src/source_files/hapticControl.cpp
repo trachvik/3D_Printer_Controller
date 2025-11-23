@@ -53,41 +53,65 @@ void hapticControl::init()
 
   start_angle = sensor.getAngle();
 }
+void hapticControl::startTask(void* _this)
+{
+    // Převedeme (přetypujeme) void* zpátky na naši třídu
+    hapticControl* controller = (hapticControl*)_this;
+    
+    static uint32_t lastCheck = 0;
+    if (millis() - lastCheck > 2000) {
+        lastCheck = millis();
+        
+        UBaseType_t zbyvajiciMisto = uxTaskGetStackHighWaterMark(NULL);
+        
+        Serial.printf("Nejmene mista v historii tasku: %d bajtu\n", zbyvajiciMisto);
+        
+        if (zbyvajiciMisto < 200) {
+            Serial.println("VAROVANI: Zvys Stack Size v xTaskCreatePinnedToCore!");
+        }
+    }
+    
+    // A zavoláme tu skutečnou loop funkci
+    controller->loop();
+}
 
 void hapticControl::loop()
 {
-  sensor.update();
-  // main FOC algorithm function
-  motor.loopFOC();
-
-  setNumSteps();
-
-  // Preserve position when num_steps is changed
-  if(num_steps != num_steps_old)
+  while(1)
   {
-    step_count_buffer = step_count;
-    step_size = _2PI/(float)num_steps;
-    start_angle  = sensor.getAngle();
-    num_steps_old = num_steps;
+    sensor.update();
+    // main FOC algorithm function
+    motor.loopFOC();
+
+    setNumSteps();
+
+    // Preserve position when num_steps is changed
+    if(num_steps != num_steps_old)
+    {
+      step_count_buffer = step_count;
+      step_size = _2PI/(float)num_steps;
+      start_angle  = sensor.getAngle();
+      num_steps_old = num_steps;
+    }
+
+    float angle_rel = (sensor.getAngle() - start_angle);
+
+    // compute signed step count (round to nearest step)
+    float step_count_f = ((float)num_steps/_2PI) * angle_rel;
+    step_count = (int)round(step_count_f) + step_count_buffer;
+
+    while(angle_rel > _2PI) angle_rel -= _2PI;
+    while(angle_rel < 0) angle_rel += _2PI;
+
+    int step_count_abs = ((float)num_steps/_2PI) * angle_rel;
+    float between_steps_pos = angle_rel - step_count_abs * step_size + step_size/2; // add step_size/2 to stabilize center of step
+
+    // Use smooth sinusoidal transition for better stability
+    float normalized_pos = between_steps_pos / step_size; // 0 to 1
+    float target_voltage = -motor.voltage_limit * sin(_2PI * normalized_pos);
+
+    motor.move(target_voltage);
   }
-
-  float angle_rel = (sensor.getAngle() - start_angle);
-
-  // compute signed step count (round to nearest step)
-  float step_count_f = ((float)num_steps/_2PI) * angle_rel;
-  step_count = (int)round(step_count_f) + step_count_buffer;
-
-  while(angle_rel > _2PI) angle_rel -= _2PI;
-  while(angle_rel < 0) angle_rel += _2PI;
-
-  int step_count_abs = ((float)num_steps/_2PI) * angle_rel;
-  float between_steps_pos = angle_rel - step_count_abs * step_size + step_size/2; // add step_size/2 to stabilize center of step
-
-  // Use smooth sinusoidal transition for better stability
-  float normalized_pos = between_steps_pos / step_size; // 0 to 1
-  float target_voltage = -motor.voltage_limit * sin(_2PI * normalized_pos);
-
-  motor.move(target_voltage);
 
 }
 
