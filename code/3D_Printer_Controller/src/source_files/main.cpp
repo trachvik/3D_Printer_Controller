@@ -6,6 +6,9 @@
 #include "header_files/Display.h"
 #include <Wire.h>
 
+#define setup_clear_PIN 14
+#define led_PIN 27
+
 hapticControl HC(MagneticSensorSPI(AS5048_SPI, 5), BLDCMotor(7), BLDCDriver6PWM(15, 16, 17, 4, 12, 32), 5);
 RotaryEncoder encoder(35, 39, RotaryEncoder::LatchMode::TWO03);
 
@@ -16,12 +19,13 @@ byte colPins[4] = {12, 13, 14, 15}; //connect to the column pinouts of the keypa
 printerControl PC(rowPins,colPins);
 bool printerControlinit = true;
 
-wifiConnect wifiCon;
-
 Display display;
+wifiConnect wifiCon(&display);
 
 void setup()
 {
+  pinMode(setup_clear_PIN, INPUT_PULLUP);
+  pinMode(led_PIN, OUTPUT);
   Serial.begin(115200);
 
   if (display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
@@ -57,14 +61,28 @@ void setup()
   );
 }
 
-long time_last = 0;
+long clear_timeout = 0;
 
 void loop()
 {
+  if(digitalRead(setup_clear_PIN) == LOW && millis() - clear_timeout > 3000) // this clears prefs after 3s hold
+  {
+    wifiCon.config_clear();
+    display.setCursor(0,0);
+    display.printText("Config cleared!\n", 1, 1);
+    delay(1000);
+    wifiCon.init();
+  }
+  else if(digitalRead(setup_clear_PIN) == HIGH)
+  {
+    clear_timeout = millis();
+  }
+
   if (HC.step_count != HC.step_count_old)
   {
-    display.printText("step_count: " + String(HC.step_count) + "\n", 0, 0, 1.5, 1);
-   // Serial.println(HC.step_count);
+    display.setCursor(0,0);
+    display.printText("step_count: " + String(HC.step_count) + "\n", 1, 1);
+    // Serial.println(HC.step_count);
     HC.step_count_old = HC.step_count;
   }
   if(wifiCon.config_saved && printerControlinit)

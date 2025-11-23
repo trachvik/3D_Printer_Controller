@@ -4,7 +4,7 @@
 #include <Preferences.h>
 
 #include "header_files/MCP23017.h"
-//#include "header_files/Display.h"
+#include "header_files/Display.h"
 
 // This class inherits from Keypad and overrides pin operations to use MCP23017 if provided
 
@@ -65,7 +65,7 @@ public:
      * 
      */
 
-     //Display display;
+     Display display;
 
 private:
 /**

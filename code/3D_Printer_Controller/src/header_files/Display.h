@@ -1,3 +1,5 @@
+#pragma once // Ensures the header is included only once when included multiple times
+
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -11,6 +13,6 @@ class Display : public Adafruit_SSD1306
 {
 public:
     Display();
-    void printText(String text, int x, int y, int textSize = 1, bool clear = false);
+    void printText(String text, int textSize = 1, bool clear = false);
 
 };

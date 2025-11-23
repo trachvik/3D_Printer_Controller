@@ -1,8 +1,8 @@
 #include "header_files/wificonnect.h"
 #include "SPIFFS.h"
 
-wifiConnect::wifiConnect()
-  : server(80)
+wifiConnect::wifiConnect(Display *disp)
+  : server(80), display(disp)
 {
     config_saved = false;
 }
@@ -18,11 +18,13 @@ void wifiConnect::init()
     String ssid = prefs.getString("ssid");
     String pass = prefs.getString("pass");
     prefs.end();
-    Serial.print("Prefs ssid: "); Serial.println(ssid);
+    //Serial.print("Prefs ssid: "); Serial.println(ssid);
 
     if(ssid == "") // first startup
     {
         Serial.println("first_startup");
+        display->setCursor(0,0);
+        display->printText("Starting Access Point.\nPlease fill the wifi credentials and config.", 1, 1);
         // Setting up access point
         WiFi.mode(WIFI_AP);
         WiFi.softAP(ap_ssid, ap_pass);
@@ -30,10 +32,10 @@ void wifiConnect::init()
         Serial.println(WiFi.softAPIP());
 
         server.on("/", [this](){
-            this->handleRoot();
+          this->handleRoot();
         });
         server.on("/save", HTTP_POST, [this](){
-            this->handleSave();
+          this->handleSave();
         });
         server.begin();
     }
@@ -50,12 +52,24 @@ void wifiConnect::connect(String ssid, String pass)
     WiFi.begin(ssid, pass); 
 
     Serial.println("Waiting for wifi");
+    display->setCursor(0,0);
+    display->printText("Connecting to WiFi\n", 1, 1);
     int timeout_s = 30;
     while (WiFi.status() != WL_CONNECTED && timeout_s-- > 0)
     {
         delay(1000);
         Serial.print(".");
+        display->printText(".", 1, 0);
     }
+    if(timeout_s <= 0)
+    {
+        Serial.println("Failed to connect to WiFi");
+        display->setCursor(0,0);
+        display->printText("Failed to connect to WiFi!\n", 1, 1);
+        return;
+    }
+    display->setCursor(0,0);
+    display->printText("Connected to:\n" + ssid, 1, 1);
     config_saved = true;
     //TO DO failure handling
 }
@@ -125,4 +139,11 @@ void wifiConnect::ParseAndSave(String stream)
     prefs.putString(index.c_str(), gcode);
   }
   prefs.end();
+}
+
+void wifiConnect::config_clear()
+{
+    prefs.begin("config", false);
+    prefs.clear();
+    prefs.end();
 }
