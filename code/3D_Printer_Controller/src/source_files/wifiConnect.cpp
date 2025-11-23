@@ -9,6 +9,7 @@ wifiConnect::wifiConnect(Display *disp)
 
 void wifiConnect::init()
 {
+    config_saved = false; // for reseting config via button
     if(!SPIFFS.begin(true))
     {
         Serial.println("An Error has occurred while mounting SPIFFS");
@@ -24,7 +25,7 @@ void wifiConnect::init()
     {
         Serial.println("first_startup");
         display->setCursor(0,0);
-        display->printText("Starting Access Point.\nPlease fill the wifi credentials and config.", 1, 1);
+        display->printText("Please fill the wifi credentials\nand printer config.", 1, 1);
         // Setting up access point
         WiFi.mode(WIFI_AP);
         WiFi.softAP(ap_ssid, ap_pass);
@@ -59,7 +60,7 @@ void wifiConnect::connect(String ssid, String pass)
     {
         delay(1000);
         Serial.print(".");
-        display->printText(".", 1, 0);
+        display->printText(".", 1, false);
     }
     if(timeout_s <= 0)
     {

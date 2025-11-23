@@ -4,7 +4,7 @@
 #include "header_files/hapticControl.h"
 #include "header_files/printerControl.h"
 #include "header_files/Display.h"
-#include <Wire.h>
+//#include <Wire.h>
 
 #define setup_clear_PIN 14
 #define led_PIN 27
@@ -16,10 +16,11 @@ RotaryEncoder encoder(35, 39, RotaryEncoder::LatchMode::TWO03);
 byte rowPins[4] = {11, 10, 9, 8}; //connect to the row pinouts of the keypad
 byte colPins[4] = {12, 13, 14, 15}; //connect to the column pinouts of the keypad
 
-printerControl PC(rowPins,colPins);
+Display display;
+
+printerControl PC(rowPins, colPins, &display);
 bool printerControlinit = true;
 
-Display display;
 wifiConnect wifiCon(&display);
 
 void setup()
@@ -40,6 +41,7 @@ void setup()
 
   wifiCon.init();
   // This prevents PC.init() from beeing called before saving values to prefs
+ 
   if(wifiCon.config_saved)
   {
     PC.init();
@@ -85,12 +87,14 @@ void loop()
     // Serial.println(HC.step_count);
     HC.step_count_old = HC.step_count;
   }
-  if(wifiCon.config_saved && printerControlinit)
+  if(wifiCon.config_saved)
   {
-    PC.init();
+    if(printerControlinit) PC.init();
+    else PC.loop();
     printerControlinit = false;
+    //Serial.println("FLAG");
   }
   wifiCon.server.handleClient();
   //HC.loop();
-  PC.loop();
+  //PC.loop();
 }

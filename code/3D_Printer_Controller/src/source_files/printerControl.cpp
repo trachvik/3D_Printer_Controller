@@ -7,8 +7,8 @@ static char keys[4][4] = {
     {'C','D','E','F'}
 };
 
-printerControl::printerControl(byte rowPins[4], byte colPins[4])
-  : kpd(makeKeymap(keys), rowPins, colPins, 4, 4, &extender)
+printerControl::printerControl(byte rowPins[4], byte colPins[4], Display *disp)
+  : kpd(makeKeymap(keys), rowPins, colPins, 4, 4, &extender), display(disp)
 {
   PATH = "/websocket";
   url = "*printers_url*"; // TO DO
@@ -59,9 +59,13 @@ void printerControl::webSocketEvent(WStype_t type, uint8_t * payload, size_t len
   switch(type) {
     case WStype_DISCONNECTED:
       Serial.println("[WSc] Disconnected!");
+      display->setCursor(0,0);
+      display->printText("Cannot connect to printer!", 1, true);
       break;
     case WStype_CONNECTED:
       Serial.println("[WSc] Connected!");
+      display->setCursor(0,0);
+      display->printText("Connected to printer!", 1, true);
       // send subscribe once on connect
       webSocket.sendTXT("{\"jsonrpc\": \"2.0\",\"method\": \"printer.objects.subscribe\",\"params\":{\"objects\": {\"heater_bed\": [\"temperature\", \"target\"], \"extruder\": [\"temperature\",\"target\"]}},\"id\": 5434}");
       //webSocket.sendTXT("{\"jsonrpc\": \"2.0\",\"method\": \"printer.gcode.script\",\"params\": {\"script\": \"M106 S255\"},\"id\": 7466}");
