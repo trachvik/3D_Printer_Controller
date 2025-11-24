@@ -1,5 +1,7 @@
 #include "header_files/printerControl.h"
 
+printerControl* printerControl::instance = nullptr; // Inicializace statického ukazatele na nullptr
+
 static char keys[4][4] = {
     {'0','1','2','3'},
     {'4','5','6','7'},
@@ -7,11 +9,25 @@ static char keys[4][4] = {
     {'C','D','E','F'}
 };
 
-printerControl::printerControl(byte rowPins[4], byte colPins[4], Display *disp)
-  : kpd(makeKeymap(keys), rowPins, colPins, 4, 4, &extender), display(disp)
+printerControl::printerControl(byte rowPins[4], byte colPins[4], int encoder_PIN0, int encoder_PIN1, Display *disp)
+  : kpd(makeKeymap(keys), rowPins, colPins, 4, 4, &extender), display(disp), encoder_PIN0(encoder_PIN0), encoder_PIN1(encoder_PIN1),
+    encoder(encoder_PIN0, encoder_PIN1, RotaryEncoder::LatchMode::TWO03)
 {
+  current_mode = PC_IDLE;
   PATH = "/websocket";
   url = "*printers_url*"; // TO DO
+}
+
+void IRAM_ATTR printerControl::readEncoderISR()
+{
+  encoder.tick(); 
+}
+
+void printerControl::Wrapper()
+{
+    if (instance != nullptr) {
+        instance->readEncoderISR(); // Tady voláme tu skutečnou metodu
+    }
 }
 
 bool printerControl::init()
@@ -48,6 +64,10 @@ bool printerControl::init()
     });
     webSocket.setReconnectInterval(15000);
 
+    instance = this; // Nastavení ukazatele na aktuální instanci
+    attachInterrupt(digitalPinToInterrupt(encoder_PIN0), Wrapper, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(encoder_PIN1), Wrapper, CHANGE);
+
     return true;
 
     //TO DO return 0 if it fails
@@ -56,7 +76,8 @@ bool printerControl::init()
 //websocket handler function
 void printerControl::webSocketEvent(WStype_t type, uint8_t * payload, size_t length)
 {
-  switch(type) {
+  switch(type)
+  {
     case WStype_DISCONNECTED:
       Serial.println("[WSc] Disconnected!");
       display->setCursor(0,0);
@@ -67,47 +88,111 @@ void printerControl::webSocketEvent(WStype_t type, uint8_t * payload, size_t len
       display->setCursor(0,0);
       display->printText("Connected to printer!", 1, true);
       // send subscribe once on connect
-      webSocket.sendTXT("{\"jsonrpc\": \"2.0\",\"method\": \"printer.objects.subscribe\",\"params\":{\"objects\": {\"heater_bed\": [\"temperature\", \"target\"], \"extruder\": [\"temperature\",\"target\"]}},\"id\": 5434}");
-      //webSocket.sendTXT("{\"jsonrpc\": \"2.0\",\"method\": \"printer.gcode.script\",\"params\": {\"script\": \"M106 S255\"},\"id\": 7466}");
+      printer_subscribe();
       break;
     case WStype_TEXT:
-      //webSocket.sendTXT("{\"jsonrpc\": \"2.0\",\"method\": \"printer.objects.subscribe\",\"params\":{\"objects\": {\"heater_bed\": [\"temperature\", \"target\"], \"extruder\": [\"temperature\",\"target\"]}},\"id\": 5434}");
-      //is this the right place to send text to websocket??
-      JsonDocument filter;
-      filter["params"] = true;
-      char* data = (char*)payload;
-      JsonDocument doc;
+      // Parse incoming notify_status_update which typically looks like:
+      // {"jsonrpc":"2.0","method":"notify_status_update","params":[ {"heater_bed":{...}, "extruder":{...} }, <time>]}
+      data = (char*)payload;
+      //Serial.println(data);
+      //Serial.println((char*)payload);
+      //parse_data((char*)payload);
 
-      DeserializationError error = deserializeJson(doc, data, DeserializationOption::Filter(filter));
-        // Test if parsing succeeds.
-      if (error)
-      {
-        Serial.print(F("deserializeJson() failed: "));
-        Serial.println(error.f_str());
-        return;
-      }
-        // Fetch values.
-        //
-        // Most of the time, you can rely on the implicit casts.
-        // In other case, you can do doc["time"].as<long>();
-      // payload shape: params is an array where params[0] is an object
-      // containing both "heater_bed" and "extruder" objects.
-      // Access the nested keys directly so the original single-index
-      // pattern remains similar but targets the correct fields.
-      ext_temp = doc["params"][0]["extruder"]["temperature"];
-      ext_target = doc["params"][0]["extruder"]["target"];
-      bed_temp = doc["params"][0]["heater_bed"]["temperature"];
-      bed_target = doc["params"][0]["heater_bed"]["target"];
-        // Print values.
-        //Serial.printf("Extruder Temperature: %.2f --> %.2f,  Bed Temperature: %.2f --> %.2f \n", ext_temp, ext_target, bed_temp, bed_target);
-
-      //Serial.printf("[WSc] Text: %s\n", payload);
+      parse_flag = true;
       break;
   }
- /*if(type == WStype_TEXT)
- {
+}
 
- }*/
+void printerControl::parse_data()
+{
+  if(parse_flag)
+  {
+    DynamicJsonDocument doc(1024); // adjust size if needed
+    DeserializationError error = deserializeJson(doc, data.c_str());
+    if (error)
+    {
+      Serial.print(F("deserializeJson() failed: "));
+      Serial.println(error.f_str());
+      Serial.printf("payload: %s\n", data);
+      return;
+    }
+    // Extract relevant data to root object
+    JsonObject root;
+
+    if (doc.containsKey("method")) //subscribe responce
+    {
+      if(doc["method"] == "notify_status_update")
+      {
+        root = doc["params"][0].as<JsonObject>();
+        //Serial.println("subscribe_flag");
+      }
+    }
+    if (doc.containsKey("result") && doc["result"].is<JsonObject>()) //query responce
+    {
+      root = doc["result"]["status"].as<JsonObject>();
+      //Serial.println("query_flag");
+    }
+
+    //parse values from root object
+    // extruder
+    if (root.containsKey("extruder") && root["extruder"].is<JsonObject>())
+    {
+      JsonObject ex = root["extruder"].as<JsonObject>();
+      if (ex.containsKey("temperature")) ext_temp = ex["temperature"].as<float>();
+      if (ex.containsKey("target")) ext_target = ex["target"].as<float>();
+    }
+
+    // heater_bed
+    if (root.containsKey("heater_bed") && root["heater_bed"].is<JsonObject>())
+    {
+      JsonObject hb = root["heater_bed"].as<JsonObject>();
+      if (hb.containsKey("temperature")) bed_temp = hb["temperature"].as<float>();
+      if (hb.containsKey("target")) bed_target = hb["target"].as<float>();
+    }
+
+    // position
+    if (root.containsKey("toolhead") && root["toolhead"].is<JsonObject>())
+    {
+      JsonObject hb = root["toolhead"].as<JsonObject>();
+      if (hb.containsKey("position"))
+      {
+        for(int i = 0; i < 4; i++)
+          position[i] = hb["position"][i].as<float>();
+      }
+    }
+    // Print values.
+      //Serial.printf("Extruder Temperature: %.2f --> %.2f,  Bed Temperature: %.2f --> %.2f \n", ext_temp, ext_target, bed_temp, bed_target);
+      //Serial.printf("Position: [%.2f, %.2f, %.2f, %.2f] \n", position[0], position[1], position[2], position[3]);
+
+    //Serial.printf("[WSc] Text: %s\n", payload);
+    display->setCursor(0,10);
+    display->clearDisplay();
+    display->printf("X: %.0f\nY: %.0f\nZ: %.0f\nE: %.0f", position[0], position[1], position[2], position[3]);
+    display->display();
+
+    parse_flag = false;
+    }
+}
+
+void printerControl::printer_subscribe()
+{
+  String data;
+
+  //list of objects to subscribe to:
+  //Object -> Object Fields | example: "heater_bed": ["temperature", "target"]
+  https://moonraker.readthedocs.io/en/latest/printer_objects/ | list of the objects and their fields
+  data += "\"heater_bed\": [\"temperature\", \"target\"],";
+  data +=  "\"extruder\": [\"temperature\", \"target\"],";
+  data += "\"toolhead\": [\"position\"]"; // target? | position x live_position
+
+  String txt_subcribe = "{\"jsonrpc\": \"2.0\",\"method\": \"printer.objects.subscribe\",\"params\": {\"objects\": {"
+    + data + "}}, \"id\": 5434}";
+
+  String txt_query = "{\"jsonrpc\": \"2.0\",\"method\": \"printer.objects.query\",\"params\": {\"objects\": {"
+    + data + "}}, \"id\": 5434}";
+
+  webSocket.sendTXT(txt_query);
+  webSocket.sendTXT(txt_subcribe); // force report at the start (responces are send only when changes in values occur)
 
 }
 
@@ -128,5 +213,41 @@ void printerControl::loop()
       webSocket.sendTXT(send);
       Serial.println(key);
     }
+
+    parse_data();
+    change_mode();
+}
+
+long lastMillis = 0;
+
+void printerControl::change_mode()
+{
+  int currPos = encoder.getPosition() / 2;
+  /*if(millis() - lastMillis > 500)
+  {
+    Serial.print("Encoder position PC: ");
+    Serial.println(currPos);
+    lastMillis = millis();
+  }*/
+  if(currPos != last_encoder_pos)
+  {
+    int change;
+    if(currPos > last_encoder_pos)
+    {
+      change = (int)current_mode + 1;
+      if(change > MODE_COUNT) change = 0;
+    }
+    else if(currPos < last_encoder_pos)
+    {
+      change = (int)current_mode - 1;
+      if(change < 0) change = MODE_COUNT;
+    }
+    current_mode = static_cast<mode>(change);
+    last_encoder_pos = currPos;
+    //Serial.print("Current mode: ");
+    //Serial.println(current_mode);
+  }
+  
+      // delta - for fast rotating?
 }
 

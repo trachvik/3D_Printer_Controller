@@ -15,4 +15,5 @@ public:
     Display();
     void printText(String text, int textSize = 1, bool clear = false);
 
+
 };

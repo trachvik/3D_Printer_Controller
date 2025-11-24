@@ -2,6 +2,7 @@
 #include <ArduinoJson.h>
 #include <Keypad.h>
 #include <Preferences.h>
+#include <RotaryEncoder.h>
 
 #include "header_files/MCP23017.h"
 #include "header_files/Display.h"
@@ -32,6 +33,17 @@ private:
     MCP23017 *extender;
 };
 
+enum mode
+{
+    PC_IDLE,
+    PC_SET_POSITION,
+    PC_SET_TEMPERATURE,
+    /**
+     * Additional modes can be added here
+     */
+    MODE_COUNT
+};
+
 
 class printerControl
 {
@@ -41,7 +53,7 @@ public:
      * @param rowPins array of 4 bytes representing the row pins of the keypad
      * @param colPins array of 4 bytes representing the column pins of the keypad
      */
-    printerControl(byte rowPins[4], byte colPins[4], Display *disp = nullptr);
+    printerControl(byte rowPins[4], byte colPins[4], int encoder_PIN0, int encoder_PIN1, Display *disp = nullptr);
     /**
      * Initializes the websocket connection to the printer server
      * @param HOST the IP address of the printer server
@@ -60,6 +72,7 @@ public:
     float ext_target;
     float bed_temp;
     float bed_target;
+    float position[4];
     /**
      * 
      * 
@@ -73,8 +86,22 @@ private:
      * @param length the length of the payload
      */
     void webSocketEvent(WStype_t type, uint8_t * payload, size_t length);
+    void printer_subscribe();
+    String data;
+    bool parse_flag;
+    void parse_data();
+    void change_mode();
 
+    static printerControl* instance; // Ukazatel na "sebe sama"
+    static void Wrapper();        // Statická funkce, kterou sežere attachInterrupt
+    void IRAM_ATTR readEncoderISR();
+    int encoder_PIN0;
+    int encoder_PIN1;
+
+    mode current_mode;
     MCP23017 extender;
+    RotaryEncoder encoder;
+    int last_encoder_pos;
     Keypad_MCP kpd;
     WebSocketsClient webSocket;
     Display *display;

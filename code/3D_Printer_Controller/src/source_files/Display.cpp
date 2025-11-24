@@ -17,3 +17,5 @@ void Display::printText(String text, int textSize, bool clear)
     this->print(text);
     this->display();
 }
+
+

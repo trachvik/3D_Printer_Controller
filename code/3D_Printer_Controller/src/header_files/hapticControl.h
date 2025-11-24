@@ -20,7 +20,7 @@ public:
      * @param num_steps_init    initial number steps in one full rotation
      * @param voltage_limit     voltage limit for the motor
      */
-    hapticControl(MagneticSensorSPI sensor_init, BLDCMotor motor_init, BLDCDriver6PWM driver_init, int voltage_limit);
+    hapticControl(MagneticSensorSPI sensor_init, BLDCMotor motor_init, BLDCDriver6PWM driver_init, int voltage_limit, int encoder_PIN0, int encoder_PIN1);
     /**
      * This function has to be called in the setup() part of the main code
      */
@@ -29,12 +29,6 @@ public:
      * This function has to be called in the loop() part of the main code
      */
     void loop();
-    /**
-     * Initialize the rotary encoder instance.
-     * @param encoder RotaryEncoder instance to initialize
-     * Must be called before init() !!!
-     */
-    void encoderInit(RotaryEncoder &encoder);
     /**
      * Update num_steps from a rotary encoder
      */
@@ -51,5 +45,5 @@ public:
     MagneticSensorSPI sensor;
     BLDCMotor motor;
     BLDCDriver6PWM driver;
-    RotaryEncoder* encoder;  // will be set in encoderInit
+    RotaryEncoder encoder;
 };

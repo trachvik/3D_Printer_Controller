@@ -1,7 +1,8 @@
 #include "header_files/hapticControl.h"
  
-hapticControl::hapticControl(MagneticSensorSPI sensor_init, BLDCMotor motor_init, BLDCDriver6PWM driver_init, int voltage_limit)
-  : sensor(sensor_init), motor(motor_init), driver(driver_init), voltage_limit(voltage_limit)
+hapticControl::hapticControl(MagneticSensorSPI sensor_init, BLDCMotor motor_init, BLDCDriver6PWM driver_init, int voltage_limit, int encoder_PIN0, int encoder_PIN1)
+  : sensor(sensor_init), motor(motor_init), driver(driver_init), voltage_limit(voltage_limit),
+    encoder(encoder_PIN0, encoder_PIN1, RotaryEncoder::LatchMode::TWO03)
 {
   step_size = _2PI/(float)num_steps;
   num_steps_old = num_steps;
@@ -83,7 +84,7 @@ void hapticControl::loop()
     // main FOC algorithm function
     motor.loopFOC();
 
-    setNumSteps();
+    setNumSteps(); // TO DO interrupt? or here in task?
 
     // Preserve position when num_steps is changed
     if(num_steps != num_steps_old)
@@ -115,19 +116,28 @@ void hapticControl::loop()
 
 }
 
+long last_millis = 0;
+
 void hapticControl::setNumSteps()
 {
   // Update encoder state
-  encoder->tick();
-  int curPos = encoder->getPosition() / 2;
+  encoder.tick();
+  int curPos = encoder.getPosition() / 2;
+  /*if(millis() - last_millis > 500)
+  {
+    Serial.print("Encoder position HC : ");
+    Serial.println(curPos);
+    last_millis = millis();
+  }*/
+
   // compute coarse relative position in blocks of 16 (adjust as needed)
   encoder_val = abs(curPos - (curPos - curPos % 5)) + 1;  // 5 ... number of step increments | numbers [1,5]
   // store into the object's num_steps member
   num_steps = encoder_val * 4;
 }
 
-void hapticControl::encoderInit(RotaryEncoder &encoder)
+/*void hapticControl::encoderInit(RotaryEncoder &encoder)
 {
   // Store the address of the passed encoder
   this->encoder = &encoder;
-}
+}*/
