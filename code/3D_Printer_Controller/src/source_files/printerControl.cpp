@@ -1,6 +1,6 @@
 #include "header_files/printerControl.h"
 
-printerControl* printerControl::instance = nullptr; // Inicializace statického ukazatele na nullptr
+printerControl* printerControl::instance = nullptr; // Inicialization of the static instance pointer
 
 static char keys[4][4] = {
     {'0','1','2','3'},
@@ -15,7 +15,7 @@ printerControl::printerControl(byte rowPins[4], byte colPins[4], int encoder_PIN
 {
   current_mode = PC_IDLE;
   PATH = "/websocket";
-  url = "*printers_url*"; // TO DO
+  connected = false;
 }
 
 void IRAM_ATTR printerControl::readEncoderISR()
@@ -26,7 +26,7 @@ void IRAM_ATTR printerControl::readEncoderISR()
 void printerControl::Wrapper()
 {
     if (instance != nullptr) {
-        instance->readEncoderISR(); // Tady voláme tu skutečnou metodu
+        instance->readEncoderISR(); // Call the actual ISR method
     }
 }
 
@@ -47,6 +47,7 @@ bool printerControl::init()
     prefs.end();
 
     //webSocketInit:
+    url = "http://" + HOST;
     String header = "Origin: " + url;
     webSocket.setExtraHeaders(header.c_str());
     webSocket.begin(HOST, PORT, PATH);
@@ -64,7 +65,8 @@ bool printerControl::init()
     });
     webSocket.setReconnectInterval(15000);
 
-    instance = this; // Nastavení ukazatele na aktuální instanci
+    instance = this; // Set the static instance pointer to this instance
+    // Attach interrupts for the encoder pins
     attachInterrupt(digitalPinToInterrupt(encoder_PIN0), Wrapper, CHANGE);
     attachInterrupt(digitalPinToInterrupt(encoder_PIN1), Wrapper, CHANGE);
 
@@ -80,34 +82,40 @@ void printerControl::webSocketEvent(WStype_t type, uint8_t * payload, size_t len
   {
     case WStype_DISCONNECTED:
       Serial.println("[WSc] Disconnected!");
-      display->setCursor(0,0);
-      display->printText("Cannot connect to printer!", 1, true);
+      //display->setCursor(0,0);
+      //display->printText("Cannot connect to printer!", 1, true);
+      connected = false;
       break;
     case WStype_CONNECTED:
       Serial.println("[WSc] Connected!");
-      display->setCursor(0,0);
-      display->printText("Connected to printer!", 1, true);
+      //display->setCursor(0,0);
+      //display->printText("Connected to printer!", 1, true);
       // send subscribe once on connect
-      printer_subscribe();
+      //printer_subscribe();
+      connected = true;
+      connect_display_flag = true;
+      //Defer Display([this](){this->displayShow(); });
+      // Set state to indicate we need to send Query
+        connection_state = 1;
+        last_command_millis = millis();
       break;
     case WStype_TEXT:
-      // Parse incoming notify_status_update which typically looks like:
-      // {"jsonrpc":"2.0","method":"notify_status_update","params":[ {"heater_bed":{...}, "extruder":{...} }, <time>]}
-      data = (char*)payload;
-      //Serial.println(data);
-      //Serial.println((char*)payload);
-      //parse_data((char*)payload);
-
-      parse_flag = true;
+      if(connected)
+      {
+        data = (char*)payload;
+        //Defer Display([this](){this->displayShow(); });
+        //Defer Parse([this](){this->parse_data(); });
+        newDataAvailable = true;
+      }
       break;
   }
 }
 
 void printerControl::parse_data()
 {
-  if(parse_flag)
-  {
-    DynamicJsonDocument doc(1024); // adjust size if needed
+  //if(parse_flag)
+  //{
+    DynamicJsonDocument doc(4096); // adjust size if needed
     DeserializationError error = deserializeJson(doc, data.c_str());
     if (error)
     {
@@ -165,18 +173,19 @@ void printerControl::parse_data()
       //Serial.printf("Position: [%.2f, %.2f, %.2f, %.2f] \n", position[0], position[1], position[2], position[3]);
 
     //Serial.printf("[WSc] Text: %s\n", payload);
-    display->setCursor(0,10);
-    display->clearDisplay();
-    display->printf("X: %.0f\nY: %.0f\nZ: %.0f\nE: %.0f", position[0], position[1], position[2], position[3]);
-    display->display();
+    //display->setCursor(0,10);
+    //display->clearDisplay();
+    //display->printf("X: %.0f\nY: %.0f\nZ: %.0f\nE: %.0f", position[0], position[1], position[2], position[3]);
+    //display->display();
 
-    parse_flag = false;
-    }
+    //parse_flag = false;
+    //}
 }
 
-void printerControl::printer_subscribe()
+String printerControl::dataToSend(bool isQuery)
 {
   String data;
+  String dataToSend;
 
   //list of objects to subscribe to:
   //Object -> Object Fields | example: "heater_bed": ["temperature", "target"]
@@ -185,20 +194,50 @@ void printerControl::printer_subscribe()
   data +=  "\"extruder\": [\"temperature\", \"target\"],";
   data += "\"toolhead\": [\"position\"]"; // target? | position x live_position
 
-  String txt_subcribe = "{\"jsonrpc\": \"2.0\",\"method\": \"printer.objects.subscribe\",\"params\": {\"objects\": {"
-    + data + "}}, \"id\": 5434}";
-
-  String txt_query = "{\"jsonrpc\": \"2.0\",\"method\": \"printer.objects.query\",\"params\": {\"objects\": {"
-    + data + "}}, \"id\": 5434}";
-
-  webSocket.sendTXT(txt_query);
-  webSocket.sendTXT(txt_subcribe); // force report at the start (responces are send only when changes in values occur)
-
+  if(isQuery)
+  {
+    dataToSend = "{\"jsonrpc\": \"2.0\",\"method\": \"printer.objects.query\",\"params\": {\"objects\": {"
+      + data + "}}, \"id\": 5434}";
+  }
+  else
+  {
+    dataToSend = "{\"jsonrpc\": \"2.0\",\"method\": \"printer.objects.subscribe\",\"params\": {\"objects\": {"
+      + data + "}}, \"id\": 5434}";
+  }
+  return dataToSend;
 }
 
 void printerControl::loop()
 {
     webSocket.loop();
+
+    // Handle connection states
+    if (connected)
+    {
+        // State 1: Send QUERY
+        // Wait at least 50ms since connection established
+        if (connection_state == 1 && (millis() - last_command_millis > 50))
+        {
+            String txt = dataToSend(true);
+            webSocket.sendTXT(txt);
+            Serial.println("[WSc] Query sent. Waiting for Subscribe...");
+            
+            connection_state = 2; // Move to next state
+            last_command_millis = millis();
+        }
+
+        // State 2: Send SUBSCRIBE
+        // Wait at least 100ms since last command
+        if (connection_state == 2 && (millis() - last_command_millis > 100))
+        {
+            String txt = dataToSend(false);
+            webSocket.sendTXT(txt);
+            Serial.println("[WSc] Subscribe sent. Printer Ready.");
+
+            connection_state = 3; // Move to Ready state
+            last_command_millis = millis();
+        }
+    }
     char key = kpd.getKey();
     if (key)
     {
@@ -214,8 +253,20 @@ void printerControl::loop()
       Serial.println(key);
     }
 
-    parse_data();
+    if (newDataAvailable)
+    {
+        parse_data(); 
+        newDataAvailable = false;
+    }
+    //periodically refresh display
+    if (millis() - last_display_update > 100)
+    {
+        displayShow();
+        last_display_update = millis();
+    }
     change_mode();
+    sendKnobBuffer();
+
 }
 
 long lastMillis = 0;
@@ -231,23 +282,120 @@ void printerControl::change_mode()
   }*/
   if(currPos != last_encoder_pos)
   {
-    int change;
-    if(currPos > last_encoder_pos)
-    {
-      change = (int)current_mode + 1;
-      if(change > MODE_COUNT) change = 0;
-    }
-    else if(currPos < last_encoder_pos)
-    {
-      change = (int)current_mode - 1;
-      if(change < 0) change = MODE_COUNT;
-    }
+    int change = (currPos > last_encoder_pos) ? (int)current_mode + 1 : change = (int)current_mode - 1;
+    if(change > MODE_COUNT - 1) change = 0;
+    else if(change < 0) change = MODE_COUNT - 1;
+
     current_mode = static_cast<mode>(change);
     last_encoder_pos = currPos;
-    //Serial.print("Current mode: ");
-    //Serial.println(current_mode);
+    //displayShow();
+    Serial.print("Current mode: ");
+    Serial.println(current_mode);
   }
   
       // delta - for fast rotating?
+}
+
+void printerControl::setStepSize(int encoder_val) // encodr val: [1,5]
+{
+  switch(encoder_val)
+  {
+      case 1:
+          step_size = 1;
+          break;
+      case 2:
+          step_size = 5;
+          break;
+      case 3:
+          step_size = 10;
+          break;
+      case 4:
+          step_size = 25;
+          break;
+      case 5:
+          step_size = 50;
+          break;
+      default:
+          break;
+  }
+  //displayShow();
+}
+
+void printerControl::knobPendingChange(int sign) // TO DO merge knobPendingChange and sendKnobBuffer into one function after including HapticControl?
+{
+  if (-sign > 0) // Clockwise turn for increasing value
+  {
+      pending_change += 1; // Zvýšit buffer
+  } else
+  {
+      pending_change -= 1; // Snížit buffer
+  }
+  last_knobMillis = millis();
+}
+
+void printerControl::sendKnobBuffer()
+{
+  if(millis() - last_knobMillis > 100 && pending_change != 0) // This prevents overflowing the printer with commands when turning the knob too fast
+  {
+    String data;
+    switch(current_mode)
+    {
+      // TO DO make position buffer for faster knob moves
+        case PC_SET_POSITION: // relative move
+            // only X axis for now | _CLIENT_LINEAR_MOVE X=-10 F=6000 | F = velocity | TO DO Generic gcode 
+            data = "{\"jsonrpc\": \"2.0\",\"method\": \"printer.gcode.script\",\"params\": {\"script\": \"_CLIENT_LINEAR_MOVE X="
+            + String(pending_change*step_size)+ " F=6000\"},\"id\": 7466}";
+            webSocket.sendTXT(data);
+            //Serial.println(pending_change);
+            break;
+        case PC_SET_TEMPERATURE:
+        default:
+            break;
+    }
+    pending_change = 0;
+  }
+}
+
+void printerControl::displayShow()
+{
+  display->clearDisplay();
+  display->setCursor(0,0);
+  if(connected)
+  {
+    if(connect_display_flag)
+    {
+      display->print("Connected to printer!");
+      display->display();
+      //delay(2000);  /// <--- is this delay ok here?
+      display->clearDisplay();
+      connect_display_flag = false;
+    }
+    if(current_mode != PC_IDLE)
+    {
+        display->setCursor(0,15);
+        display->print("Step size: "); display->print(step_size);
+        //Serial.print("Step size: "); Serial.println(step_size);
+    }
+    display->setCursor(0,0);
+    switch(current_mode)
+    {
+        case PC_IDLE:
+            display->print("IDLE");
+            break;
+        case PC_SET_POSITION: // for real time position update I have to split position-from websocket and position_print-depending on the haptic knob
+            display->print("SET POSITION");
+            display->setCursor(0,30);
+            display->print("X POSITION: "); display->print(position[0]);
+            break;
+        case PC_SET_TEMPERATURE:
+            display->print("SET TEMPERATURE");
+            display->setCursor(0,30);
+            break;
+        default:
+            display->print("UNKNOWN");
+            break;
+    }
+    display->display();
+  }
 }
 

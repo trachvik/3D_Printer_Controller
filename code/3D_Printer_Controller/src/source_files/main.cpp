@@ -12,7 +12,6 @@
 #define encoderPC_PIN0 33
 #define encoderPC_PIN1 34
 
-//#define led_PIN 27
 
 hapticControl HC(MagneticSensorSPI(AS5048_SPI, 5), BLDCMotor(7), BLDCDriver6PWM(15, 16, 17, 4, 12, 32), 5, encoderHC_PIN0, encoderHC_PIN1);
 
@@ -30,7 +29,6 @@ wifiConnect wifiCon(&display);
 void setup()
 {
   pinMode(setup_clear_PIN, INPUT_PULLUP);
-  //pinMode(led_PIN, OUTPUT);
   Serial.begin(115200);
 
   if (display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
@@ -51,16 +49,15 @@ void setup()
     PC.init();
     printerControlinit = false;
   }
-  // initialize HC and pass the rotary encoder to it
-  //HC.encoderInit(encoder);
+  // initialize HC
   HC.init();
 
   xTaskCreatePinnedToCore
   (
-    hapticControl::startTask, // Voláme tu statickou funkci
+    hapticControl::startTask, // Call the static function
     "MotorTask",
-    2048,         // <--- Změna z 8192 na 2048 (stále budete mít rezervu cca 1700 bajtů)
-    &HC, // <--- DŮLEŽITÉ: Zde předáváme odkaz na konkrétní instanci (this)
+    2048,         // Change stack size if necessary
+    &HC, // Pass the instance as parameter
     1, // reduce priority so it doesn't starve main loop
     NULL,
     1 // pin to core 1
@@ -83,14 +80,23 @@ void loop()
   {
     clear_timeout = millis();
   }
-
+  /////////////////// Handle haptic control related opearation in printerControl | TO DO HC as object in printerControl?
   if (HC.step_count != HC.step_count_old)
   {
-    display.setCursor(0,0);
-    display.printText("step_count: " + String(HC.step_count) + "\n", 1, 1);
+    int sign = (HC.step_count > HC.step_count_old) ? 1 : -1;
+    //display.setCursor(0,0);
+    //display.printText("step_count: " + String(HC.step_count) + "\n", 1, 1);
     // Serial.println(HC.step_count);
+    PC.knobPendingChange(sign);
     HC.step_count_old = HC.step_count;
   }
+  if(HC.encoder_val != HC.encoder_val_old)
+  {
+    PC.setStepSize(HC.encoder_val);
+    HC.encoder_val_old = HC.encoder_val;
+  }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
   if(wifiCon.config_saved)
   {
     if(printerControlinit) PC.init();

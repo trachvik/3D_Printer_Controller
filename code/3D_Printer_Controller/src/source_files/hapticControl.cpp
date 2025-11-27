@@ -56,23 +56,24 @@ void hapticControl::init()
 }
 void hapticControl::startTask(void* _this)
 {
-    // Převedeme (přetypujeme) void* zpátky na naši třídu
+    // Convert the passed pointer back to hapticControl instance
     hapticControl* controller = (hapticControl*)_this;
     
     static uint32_t lastCheck = 0;
-    if (millis() - lastCheck > 2000) {
+    /*if (millis() - lastCheck > 2000)
+    {
         lastCheck = millis();
         
-        UBaseType_t zbyvajiciMisto = uxTaskGetStackHighWaterMark(NULL);
+        UBaseType_t space_left = uxTaskGetStackHighWaterMark(NULL);
+        Serial.printf("Least amount of stack space that has remained for the task since the task was created: %d bytes\n", space_left);
         
-        Serial.printf("Nejmene mista v historii tasku: %d bajtu\n", zbyvajiciMisto);
-        
-        if (zbyvajiciMisto < 200) {
-            Serial.println("VAROVANI: Zvys Stack Size v xTaskCreatePinnedToCore!");
+        if (space_left < 200)
+        {
+            Serial.println("Warning: very low stack space in xTaskCreatePinnedToCore");
         }
-    }
+    }*/
     
-    // A zavoláme tu skutečnou loop funkci
+    // Now call the actual loop method
     controller->loop();
 }
 
@@ -118,7 +119,7 @@ void hapticControl::loop()
 
 long last_millis = 0;
 
-void hapticControl::setNumSteps()
+void hapticControl::setNumSteps() // TO DO interrupt?
 {
   // Update encoder state
   encoder.tick();
@@ -133,7 +134,7 @@ void hapticControl::setNumSteps()
   // compute coarse relative position in blocks of 16 (adjust as needed)
   encoder_val = abs(curPos - (curPos - curPos % 5)) + 1;  // 5 ... number of step increments | numbers [1,5]
   // store into the object's num_steps member
-  num_steps = encoder_val * 4;
+  num_steps = (6 - encoder_val) * 4;
 }
 
 /*void hapticControl::encoderInit(RotaryEncoder &encoder)

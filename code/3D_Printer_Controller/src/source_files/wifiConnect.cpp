@@ -71,6 +71,7 @@ void wifiConnect::connect(String ssid, String pass)
     }
     display->setCursor(0,0);
     display->printText("Connected to:\n" + ssid, 1, 1);
+    WiFi.setSleep(false); // disable wifi sleep to improve stability | may increase power consumption TO DO test if needed
     config_saved = true;
     //TO DO failure handling
 }
