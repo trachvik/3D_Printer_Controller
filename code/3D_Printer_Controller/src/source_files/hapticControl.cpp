@@ -7,6 +7,8 @@ hapticControl::hapticControl(MagneticSensorSPI sensor_init, BLDCMotor motor_init
   step_size = _2PI/(float)num_steps;
   num_steps_old = num_steps;
   step_count_old = step_count;
+  last_voltage = 0.0;
+  voltage_filter_alpha = 0.8;  // Filter strength: lower=smoother, higher=responsive (0.2-0.5)
 }
 
 void hapticControl::init()
@@ -27,7 +29,9 @@ void hapticControl::init()
   // pwm frequency to be used [Hz]
   // for atmega328 fixed to 32kHz
   // esp32/stm32/teensy configurable
-  driver.pwm_frequency = 32000;
+  // Lower frequency reduces audible noise but may affect smoothness
+  // Try: 20000-25000 Hz for balance between performance and noise
+  driver.pwm_frequency = 40000;  // Reduced from 32000 to minimize audible noise
   // driver config
   driver.init();
   motor.linkDriver(&driver);
@@ -110,11 +114,17 @@ void hapticControl::loop()
 
     // Use smooth sinusoidal transition for better stability
     float normalized_pos = between_steps_pos / step_size; // 0 to 1
-    float target_voltage = -motor.voltage_limit * sin(_2PI * normalized_pos);
+
+    float damping_factor = 1 - (0.6 * ((float)num_steps / 20.0)); // 0.4 for 20 steps 0.88 for 4 steps
+    
+    float target_voltage = -motor.voltage_limit * damping_factor * sin(_2PI * normalized_pos);
+    
+    // Low-pass filter to smooth voltage transitions and reduce vibrations
+    target_voltage = voltage_filter_alpha * target_voltage + (1.0 - voltage_filter_alpha) * last_voltage;
+    last_voltage = target_voltage;
 
     motor.move(target_voltage);
   }
-
 }
 
 long last_millis = 0;

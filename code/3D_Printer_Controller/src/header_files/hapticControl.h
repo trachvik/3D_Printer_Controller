@@ -52,4 +52,6 @@ private:
     BLDCMotor motor;
     BLDCDriver6PWM driver;
     RotaryEncoder encoder;
+    float last_voltage;         // Last applied voltage for low-pass filter
+    float voltage_filter_alpha; // Low-pass filter coefficient (0-1)
 };

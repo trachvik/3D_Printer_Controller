@@ -29,26 +29,26 @@ wifiConnect wifiCon(&display);
 void setup()
 {
   pinMode(setup_clear_PIN, INPUT_PULLUP);
-  Serial.begin(115200);
+  //Serial.begin(115200);
 
-  if (display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
+  /*if (display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
   {
-    Serial.println("Display initialized");
+    //Serial.println("Display initialized");
     display.clearDisplay();
     display.display();
   } else
   {
     Serial.println("Warning: display.begin() failed");
-  }
+  }*/
 
-  wifiCon.init();
+  //wifiCon.init();
   // This prevents PC.init() from beeing called before saving values to prefs
  
-  if(wifiCon.config_saved)
+  /*if(wifiCon.config_saved)
   {
     PC.init();
     printerControlinit = false;
-  }
+  }*/
   // initialize HC
   HC.init();
 
@@ -68,7 +68,7 @@ long clear_timeout = 0;
 
 void loop()
 {
-  if(digitalRead(setup_clear_PIN) == LOW && millis() - clear_timeout > 3000) // this clears prefs after 3s hold
+  /*if(digitalRead(setup_clear_PIN) == LOW && millis() - clear_timeout > 3000) // this clears prefs after 3s hold
   {
     wifiCon.config_clear();
     display.setCursor(0,0);
@@ -108,5 +108,5 @@ void loop()
   //HC.loop();
   //PC.loop();
 
-  display.printf("step_count: %d\n", HC.step_count);  
+  display.printf("step_count: %d\n", HC.step_count);  */
 }
