@@ -174,7 +174,7 @@ void hapticControl::loop()
     
     last_voltage = target_voltage;
 
-    motor.move(target_voltage);
+    motor.move(target_voltage*1.556);
   }
 }
 
