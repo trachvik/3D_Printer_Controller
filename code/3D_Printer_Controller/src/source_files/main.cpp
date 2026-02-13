@@ -28,7 +28,7 @@ wifiConnect wifiCon(&display);
 
 void setup()
 {
-  pinMode(setup_clear_PIN, INPUT_PULLUP);
+  //pinMode(setup_clear_PIN, INPUT_PULLUP);
   //Serial.begin(115200);
 
   /*if (display.begin(SSD1306_SWITCHCAPVCC, 0x3C))
@@ -64,7 +64,7 @@ void setup()
   );
 }
 
-long clear_timeout = 0;
+//long clear_timeout = 0;
 
 void loop()
 {

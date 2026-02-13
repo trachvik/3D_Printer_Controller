@@ -95,86 +95,9 @@ void hapticControl::loop()
   while(1)
   {
     sensor.update();
-    // main FOC algorithm function
     motor.loopFOC();
-
-    setNumSteps(); // TO DO interrupt? or here in task?
-
-    // Preserve position when num_steps is changed
-    if(num_steps != num_steps_old)
-    {
-      step_count_buffer = step_count;
-      step_size = _2PI/(float)(num_steps > 0 ? num_steps : 1);  // Avoid division by zero
-      start_angle  = sensor.getAngle();
-      num_steps_old = num_steps;
-    }
-
-    float angle_rel = (sensor.getAngle() - start_angle);
-
-    // compute signed step count (round to nearest step)
-    float step_count_f = (num_steps > 0) ? ((float)num_steps/_2PI) * angle_rel : 0;
-    step_count = (int)round(step_count_f) + step_count_buffer;
-
-    while(angle_rel > _2PI) angle_rel -= _2PI;
-    while(angle_rel < 0) angle_rel += _2PI;
-
-    int step_count_abs = (num_steps > 0) ? ((float)num_steps/_2PI) * angle_rel : 0;
-    float between_steps_pos = angle_rel - step_count_abs * step_size + step_size/2; // add step_size/2 to stabilize center of step
-
-    float target_voltage;
-
-    // Smooth mode: velocity damping for continuous resistance
-    if (num_steps == 0) {  // Use num_steps == 0 to enable smooth mode
-      float damping_coefficient = 0.3f;  // Adjust resistance: 0.1 = light, 0.5 = heavy
-      target_voltage = -damping_coefficient * motor.shaft_velocity;
-      
-      // Smooth velocity deadband with linear ramp to avoid bumps
-      float velocity_min = 0.5f;   // Below this: zero torque
-      float velocity_max = 3.0f;   // Above this: full damping
-      float abs_velocity = abs(motor.shaft_velocity);
-      
-      if (abs_velocity < velocity_min) {
-        target_voltage = 0.0f;
-      } else if (abs_velocity < velocity_max) {
-        // Linear ramp from 0 to full damping
-        float scaling_factor = (abs_velocity - velocity_min) / (velocity_max - velocity_min);
-        target_voltage *= scaling_factor;
-      }
-      // else: full damping (no scaling)
-      
-      // Heavier filtering for smooth mode to eliminate velocity noise
-      // Options: 0.05-0.95 (very smooth), 0.1-0.9 (smooth), 0.2-0.8 (moderate)
-      target_voltage = 0.08f * target_voltage + 0.75f * last_voltage;
-    } 
-    // Detent mode: step-based haptic feedback
-    else {
-      // Use smooth sinusoidal transition for better stability
-      float normalized_pos = between_steps_pos / step_size; // 0 to 1
-      //float damping_factor = 1 - (0.6 * ((float)num_steps / 20.0)); // 0.4 for 20 steps 0.88 for 4 steps
-      float damping_factor = 0.2f;
-      target_voltage = -motor.voltage_limit * damping_factor * sin(_2PI * normalized_pos);
-      
-      // Position deadband with ramp: reduce torque near step center
-      float pos_deadband_min = 0.08f;  // Inner zone: zero torque (5% of step around center)
-      float pos_deadband_max = 0.15f;  // Outer zone: full torque (15% of step around center)
-      float dist_from_center = abs(normalized_pos - 0.5f);  // Distance from step center
-      
-      if (dist_from_center < pos_deadband_min) {
-        target_voltage = 0.0f;
-      } else if (dist_from_center < pos_deadband_max) {
-        // Linear ramp from 0 to full torque
-        float scaling_factor = (dist_from_center - pos_deadband_min) / (pos_deadband_max - pos_deadband_min);
-        target_voltage *= scaling_factor;
-      }
-      // else: full torque (no scaling)
-      
-      // Normal filtering for detent mode
-      target_voltage = voltage_filter_alpha * target_voltage + (1.0 - voltage_filter_alpha) * last_voltage;
-    }
-    
-    last_voltage = target_voltage;
-
-    motor.move(target_voltage*1.556);
+    motor.move(3);
+    delay(5);
   }
 }
 
