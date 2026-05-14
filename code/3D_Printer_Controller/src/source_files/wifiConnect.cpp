@@ -1,4 +1,4 @@
-#include "header_files/wificonnect.h"
+#include "header_files/wifiConnect.h"
 #include "SPIFFS.h"
 
 wifiConnect::wifiConnect(Display *disp)
